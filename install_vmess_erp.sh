@@ -263,7 +263,6 @@ prompt_interactive_inputs() {
   prompt_value XRAY_LOCAL_PORT "local Xray VMess port" "$XRAY_LOCAL_PORT"
   prompt_optional_value XRAY_UUID "VMess UUID" "$XRAY_UUID"
   prompt_value CLIENT_ID "erp client id" "${CLIENT_ID:-$(default_client_id)}"
-  prompt_value GITHUB_PROXY_PREFIX "GitHub accelerator prefix" "$GITHUB_PROXY_PREFIX"
   prompt_value RUN_MODE "run mode (auto/systemd/tmux)" "$RUN_MODE"
 
   if [[ "$RUN_MODE" == "tmux" || "$RUN_MODE" == "auto" ]]; then
@@ -428,14 +427,13 @@ install_packages() {
   fi
 }
 
-ensure_dependencies() {
+# Tools needed to fetch and unpack the binaries. Checked before downloading so
+# the downloads can run before we prompt for the rest of the parameters.
+ensure_download_dependencies() {
   local missing=()
 
   have_cmd curl || missing+=(curl)
   have_cmd unzip || missing+=(unzip)
-  if [[ "$RUN_MODE" == "tmux" ]]; then
-    have_cmd tmux || missing+=(tmux)
-  fi
 
   if [[ ${#missing[@]} -gt 0 ]]; then
     if is_root; then
@@ -448,6 +446,20 @@ ensure_dependencies() {
 
   have_cmd curl || die "curl is required."
   have_cmd unzip || die "unzip is required."
+}
+
+# Tools needed once the run mode is known (tmux) plus the coreutils used to write
+# configs and the VMess link.
+ensure_runtime_dependencies() {
+  if [[ "$RUN_MODE" == "tmux" ]] && ! have_cmd tmux; then
+    if is_root; then
+      log "Installing required package: tmux"
+      install_packages tmux
+    else
+      die "tmux is required for RUN_MODE=tmux. Install it first, or run as root so the script can install packages."
+    fi
+  fi
+
   if [[ "$RUN_MODE" == "tmux" ]]; then
     have_cmd tmux || die "tmux is required for RUN_MODE=tmux."
   fi
@@ -470,7 +482,8 @@ proxify_url() {
 download_file() {
   local url="$1"
   local output="$2"
-  curl -fsSL --show-error --retry 3 --connect-timeout 20 \
+  log "GET ${url}"
+  curl -fL --progress-bar --retry 3 --connect-timeout 20 \
     -H 'User-Agent: erp-vmess-installer' \
     -o "$output" \
     "$url"
@@ -505,7 +518,8 @@ detect_assets() {
   esac
 }
 
-install_xray() {
+# Download + unpack Xray into the temp dir. No install paths needed yet.
+download_xray() {
   local tmp_dir="$1"
   local asset_url
   local zip_path="${tmp_dir}/${XRAY_ASSET_NAME}"
@@ -519,6 +533,12 @@ install_xray() {
   unzip -q "$zip_path" -d "$unpack_dir"
 
   [[ -f "${unpack_dir}/xray" ]] || die "Downloaded Xray archive does not contain xray binary."
+}
+
+# Copy the already-downloaded Xray files into the resolved install paths.
+place_xray() {
+  local tmp_dir="$1"
+  local unpack_dir="${tmp_dir}/xray"
 
   install -d -m 0755 "$INSTALL_BIN_DIR" "$XRAY_CONFIG_DIR" "$XRAY_ASSET_DIR"
   install -m 0755 "${unpack_dir}/xray" "${INSTALL_BIN_DIR}/xray"
@@ -531,7 +551,8 @@ install_xray() {
   fi
 }
 
-install_erp() {
+# Download the erp binary into the temp dir. No install paths needed yet.
+download_erp() {
   local tmp_dir="$1"
   local asset_url
   local bin_path="${tmp_dir}/${ERP_ASSET_NAME}"
@@ -539,6 +560,12 @@ install_erp() {
   asset_url="$(latest_release_asset_url "xingfengdev-2026/erp" "$ERP_ASSET_NAME")"
   log "Downloading erp ${ERP_ASSET_NAME} from latest release"
   download_file "$(proxify_url "$asset_url")" "$bin_path"
+}
+
+# Copy the already-downloaded erp binary into the resolved install paths.
+place_erp() {
+  local tmp_dir="$1"
+  local bin_path="${tmp_dir}/${ERP_ASSET_NAME}"
 
   install -d -m 0755 "$INSTALL_BIN_DIR"
   install -m 0755 "$bin_path" "${INSTALL_BIN_DIR}/erp"
@@ -835,6 +862,35 @@ EOF
 }
 
 main() {
+  [[ "$(uname -s)" == "Linux" ]] || die "This installer only supports Linux."
+  detect_assets
+
+  # Ask for the GitHub accelerator first (interactive only) so the large Xray and
+  # erp downloads can finish before we prompt for the rest of the parameters.
+  if is_truthy "$INTERACTIVE"; then
+    [[ -t 0 ]] || die "--interactive requires a TTY."
+    prompt_value GITHUB_PROXY_PREFIX \
+      "GitHub accelerator prefix (a github-proxy instance URL, blank for none)" \
+      "$GITHUB_PROXY_PREFIX"
+  fi
+
+  # Fail fast before downloading if a required parameter is missing and there is
+  # no TTY to prompt on (e.g. `curl ... | bash`). With a TTY, validate_inputs
+  # prompts for these after the download instead.
+  if [[ ! -t 0 ]]; then
+    [[ -n "$ERP_SERVER_ADDR" ]] || die "ERP_SERVER_ADDR is required. Pass --server host:port or set ERP_SERVER_ADDR."
+    [[ -n "$ERP_REMOTE_PORT" ]] || die "ERP_REMOTE_PORT is required. Pass --remote-port PORT or set ERP_REMOTE_PORT."
+  fi
+
+  ensure_download_dependencies
+
+  TMP_DIR="$(mktemp -d)"
+  trap '[[ -n "${TMP_DIR:-}" ]] && rm -rf "$TMP_DIR"' EXIT
+
+  # Download Xray and erp up front, before asking for the rest of the settings.
+  download_xray "$TMP_DIR"
+  download_erp "$TMP_DIR"
+
   if is_truthy "$INTERACTIVE"; then
     prompt_interactive_inputs
   fi
@@ -842,14 +898,10 @@ main() {
   validate_inputs
   resolve_run_mode
   resolve_install_paths
-  ensure_dependencies
-  detect_assets
+  ensure_runtime_dependencies
 
-  TMP_DIR="$(mktemp -d)"
-  trap '[[ -n "${TMP_DIR:-}" ]] && rm -rf "$TMP_DIR"' EXIT
-
-  install_xray "$TMP_DIR"
-  install_erp "$TMP_DIR"
+  place_xray "$TMP_DIR"
+  place_erp "$TMP_DIR"
   write_xray_config
   write_erp_config
 

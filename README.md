@@ -128,9 +128,19 @@ environment variable.
 | `--install-root PATH` | `INSTALL_ROOT` | `%ProgramData%\erp-vmess` | Install location. |
 | `--no-tasks` | — | off | Install files only; don't create/start Scheduled Tasks. |
 
-> **GitHub accelerator:** if GitHub releases are slow or blocked on your network,
-> pass `--github-proxy-prefix https://your-mirror.example/` (a prefix that is
-> prepended to each GitHub URL). Leave it unset to download directly from GitHub.
+### GitHub accelerator
+
+If GitHub releases are slow or blocked on your network, point the installer at a
+GitHub accelerator with `--github-proxy-prefix`.
+
+> **Only [`github-proxy`](https://github.com/xingfengdev-2026/github-proxy)-style
+> accelerators are supported.** That is, a proxy where you request
+> `http(s)://<your-server>/<full-GitHub-URL>` and the server fetches the target
+> for you (following the 302 redirects that release assets use). Deploy your own
+> instance from <https://github.com/xingfengdev-2026/github-proxy> and pass its
+> base URL — e.g. `--github-proxy-prefix https://proxy.example.com:8080`. The
+> installer prepends that prefix to every GitHub download URL. Leave it unset to
+> download from GitHub directly.
 
 ---
 

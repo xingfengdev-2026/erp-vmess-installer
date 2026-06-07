@@ -253,7 +253,6 @@ function Prompt-InteractiveInputs {
   $script:XrayPort = Read-Value 'local Xray VMess port' $XrayPort
   $script:Uuid = Read-Value 'VMess UUID' $Uuid
   $script:ClientId = Read-Value 'erp client id' $ClientId
-  $script:GithubProxyPrefix = Read-Value 'GitHub accelerator prefix' $GithubProxyPrefix
   $script:InstallRoot = Read-Value 'install root' $InstallRoot
 }
 
@@ -300,6 +299,19 @@ function Invoke-InstallerWebRequest([string]$Url, [string]$OutFile = '') {
   if ([string]::IsNullOrWhiteSpace($OutFile)) {
     return Invoke-WebRequest -Uri $proxied -Headers $headers -UseBasicParsing -TimeoutSec 120
   }
+
+  Write-Info "GET $proxied"
+  # Prefer the bundled curl.exe (Windows 10 1803+/11) for a real progress bar and
+  # a much faster download than Invoke-WebRequest. Fall back to IWR if missing.
+  $curl = Get-Command curl.exe -CommandType Application -ErrorAction SilentlyContinue | Select-Object -First 1
+  if ($null -ne $curl) {
+    & $curl.Source -fL --progress-bar --retry 3 --connect-timeout 20 `
+      -A 'erp-vmess-windows-installer' -o $OutFile $proxied
+    if ($LASTEXITCODE -ne 0) {
+      throw "Download failed (curl exit $LASTEXITCODE): $proxied"
+    }
+    return
+  }
   Invoke-WebRequest -Uri $proxied -Headers $headers -UseBasicParsing -TimeoutSec 120 -OutFile $OutFile
 }
 
@@ -311,7 +323,8 @@ function Get-LatestAssetUrl([string]$Repo, [string]$AssetName) {
   return "https://github.com/$Repo/releases/latest/download/$AssetName"
 }
 
-function Install-Xray([string]$TempDir, [string]$BinDir) {
+# Download + unpack Xray into the temp dir. No install paths needed yet.
+function Save-Xray([string]$TempDir) {
   $assetName = 'Xray-windows-64.zip'
   $assetUrl = Get-LatestAssetUrl 'XTLS/Xray-core' $assetName
   $zipPath = Join-Path $TempDir $assetName
@@ -327,6 +340,15 @@ function Install-Xray([string]$TempDir, [string]$BinDir) {
   if ($null -eq $xraySource) {
     throw 'Downloaded Xray archive does not contain xray.exe.'
   }
+}
+
+# Copy the already-downloaded Xray files into the install dir.
+function Install-Xray([string]$TempDir, [string]$BinDir) {
+  $unpackDir = Join-Path $TempDir 'xray'
+  $xraySource = Get-ChildItem -LiteralPath $unpackDir -Recurse -Filter 'xray.exe' | Select-Object -First 1
+  if ($null -eq $xraySource) {
+    throw 'Downloaded Xray archive does not contain xray.exe.'
+  }
 
   Copy-Item -LiteralPath $xraySource.FullName -Destination (Join-Path $BinDir 'xray.exe') -Force
   foreach ($asset in @('geoip.dat', 'geosite.dat')) {
@@ -337,14 +359,20 @@ function Install-Xray([string]$TempDir, [string]$BinDir) {
   }
 }
 
-function Install-Erp([string]$TempDir, [string]$BinDir) {
+# Download the erp binary into the temp dir. No install paths needed yet.
+function Save-Erp([string]$TempDir) {
   $assetName = 'erp-x86_64-pc-windows-msvc.exe'
   $assetUrl = Get-LatestAssetUrl 'xingfengdev-2026/erp' $assetName
   $downloadPath = Join-Path $TempDir $assetName
 
   Write-Info "Downloading erp $assetName from latest release"
   Invoke-InstallerWebRequest $assetUrl $downloadPath | Out-Null
+}
 
+# Copy the already-downloaded erp binary into the install dir.
+function Install-Erp([string]$TempDir, [string]$BinDir) {
+  $assetName = 'erp-x86_64-pc-windows-msvc.exe'
+  $downloadPath = Join-Path $TempDir $assetName
   Copy-Item -LiteralPath $downloadPath -Destination (Join-Path $BinDir 'erp.exe') -Force
 }
 
@@ -518,14 +546,6 @@ function Write-Result([string]$ConfigDir, [string]$LogDir) {
 }
 
 Normalize-Defaults
-if ($Interactive) {
-  Prompt-InteractiveInputs
-}
-Validate-Inputs
-
-if ((-not $NoTasks) -or $InstallRoot.StartsWith($env:ProgramData, [StringComparison]::OrdinalIgnoreCase)) {
-  Assert-Admin
-}
 
 if (-not [Environment]::Is64BitOperatingSystem) {
   throw 'This release-based installer requires 64-bit Windows.'
@@ -533,15 +553,34 @@ if (-not [Environment]::Is64BitOperatingSystem) {
 
 [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
 
-$BinDir = Join-Path $InstallRoot 'bin'
-$ConfigDir = Join-Path $InstallRoot 'config'
-$LogDir = Join-Path $InstallRoot 'logs'
-New-Item -ItemType Directory -Force -Path $InstallRoot, $BinDir, $ConfigDir, $LogDir | Out-Null
+# Ask for the GitHub accelerator first (interactive only) so the Xray and erp
+# downloads can finish before we prompt for the rest of the parameters.
+if ($Interactive) {
+  $script:GithubProxyPrefix = Read-Value 'GitHub accelerator prefix (a github-proxy instance URL, blank for none)' $GithubProxyPrefix
+}
 
 $tempDir = Join-Path ([IO.Path]::GetTempPath()) ('erp-vmess-' + [guid]::NewGuid().ToString('N'))
 New-Item -ItemType Directory -Force -Path $tempDir | Out-Null
 
 try {
+  # Download Xray and erp up front, before asking for the rest of the settings.
+  Save-Xray $tempDir
+  Save-Erp $tempDir
+
+  if ($Interactive) {
+    Prompt-InteractiveInputs
+  }
+  Validate-Inputs
+
+  if ((-not $NoTasks) -or $InstallRoot.StartsWith($env:ProgramData, [StringComparison]::OrdinalIgnoreCase)) {
+    Assert-Admin
+  }
+
+  $BinDir = Join-Path $InstallRoot 'bin'
+  $ConfigDir = Join-Path $InstallRoot 'config'
+  $LogDir = Join-Path $InstallRoot 'logs'
+  New-Item -ItemType Directory -Force -Path $InstallRoot, $BinDir, $ConfigDir, $LogDir | Out-Null
+
   Install-Xray $tempDir $BinDir
   Install-Erp $tempDir $BinDir
 
