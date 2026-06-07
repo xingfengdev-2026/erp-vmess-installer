@@ -467,13 +467,6 @@ proxify_url() {
   fi
 }
 
-fetch_text() {
-  local url="$1"
-  curl -fsSL --show-error --retry 3 --connect-timeout 20 \
-    -H 'User-Agent: erp-vmess-installer' \
-    "$url"
-}
-
 download_file() {
   local url="$1"
   local output="$2"
@@ -483,33 +476,14 @@ download_file() {
     "$url"
 }
 
-asset_url_from_latest_release() {
+latest_release_asset_url() {
   local repo="$1"
   local asset_name="$2"
-  local api_url="https://api.github.com/repos/${repo}/releases/latest"
-  local json
-  local asset_url
-
-  log "Resolving ${repo} latest asset: ${asset_name}"
-  json="$(fetch_text "$(proxify_url "$api_url")")"
-  asset_url="$(
-    printf '%s\n' "$json" |
-      tr ',' '\n' |
-      awk -v asset="/${asset_name}" '
-        /"browser_download_url":/ {
-          line = $0
-          sub(/^[^:]*:[[:space:]]*"/, "", line)
-          sub(/".*$/, "", line)
-          if (substr(line, length(line) - length(asset) + 1) == asset) {
-            print line
-            exit
-          }
-        }
-      '
-  )"
-
-  [[ -n "$asset_url" ]] || die "Asset ${asset_name} not found in ${repo} latest release."
-  printf '%s\n' "$asset_url"
+  # Use GitHub's stable "latest release" redirect instead of the JSON API.
+  # The unauthenticated api.github.com endpoint is rate limited to 60 requests
+  # per hour per IP; hitting that limit was the usual cause of the misleading
+  # "Asset not found" error. This download URL is not subject to that limit.
+  printf 'https://github.com/%s/releases/latest/download/%s\n' "$repo" "$asset_name"
 }
 
 detect_assets() {
@@ -537,8 +511,8 @@ install_xray() {
   local zip_path="${tmp_dir}/${XRAY_ASSET_NAME}"
   local unpack_dir="${tmp_dir}/xray"
 
-  asset_url="$(asset_url_from_latest_release "XTLS/Xray-core" "$XRAY_ASSET_NAME")"
-  log "Downloading Xray via GitHub accelerator"
+  asset_url="$(latest_release_asset_url "XTLS/Xray-core" "$XRAY_ASSET_NAME")"
+  log "Downloading Xray ${XRAY_ASSET_NAME} from latest release"
   download_file "$(proxify_url "$asset_url")" "$zip_path"
 
   mkdir -p "$unpack_dir"
@@ -562,8 +536,8 @@ install_erp() {
   local asset_url
   local bin_path="${tmp_dir}/${ERP_ASSET_NAME}"
 
-  asset_url="$(asset_url_from_latest_release "xingfengdev-2026/erp" "$ERP_ASSET_NAME")"
-  log "Downloading erp via GitHub accelerator"
+  asset_url="$(latest_release_asset_url "xingfengdev-2026/erp" "$ERP_ASSET_NAME")"
+  log "Downloading erp ${ERP_ASSET_NAME} from latest release"
   download_file "$(proxify_url "$asset_url")" "$bin_path"
 
   install -d -m 0755 "$INSTALL_BIN_DIR"

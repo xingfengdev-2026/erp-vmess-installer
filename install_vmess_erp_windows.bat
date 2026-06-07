@@ -304,14 +304,11 @@ function Invoke-InstallerWebRequest([string]$Url, [string]$OutFile = '') {
 }
 
 function Get-LatestAssetUrl([string]$Repo, [string]$AssetName) {
-  Write-Info "Resolving $Repo latest asset: $AssetName"
-  $api = "https://api.github.com/repos/$Repo/releases/latest"
-  $release = (Invoke-InstallerWebRequest $api).Content | ConvertFrom-Json
-  $asset = $release.assets | Where-Object { $_.name -eq $AssetName } | Select-Object -First 1
-  if ($null -eq $asset) {
-    throw "Asset $AssetName not found in $Repo latest release."
-  }
-  return [string]$asset.browser_download_url
+  # Use GitHub's stable "latest release" redirect instead of the JSON API.
+  # The unauthenticated api.github.com endpoint is rate limited to 60 requests
+  # per hour per IP; hitting that limit was the usual cause of the misleading
+  # "Asset not found" error. This download URL is not subject to that limit.
+  return "https://github.com/$Repo/releases/latest/download/$AssetName"
 }
 
 function Install-Xray([string]$TempDir, [string]$BinDir) {
@@ -320,7 +317,7 @@ function Install-Xray([string]$TempDir, [string]$BinDir) {
   $zipPath = Join-Path $TempDir $assetName
   $unpackDir = Join-Path $TempDir 'xray'
 
-  Write-Info 'Downloading Xray through the GitHub accelerator'
+  Write-Info "Downloading Xray $assetName from latest release"
   Invoke-InstallerWebRequest $assetUrl $zipPath | Out-Null
 
   New-Item -ItemType Directory -Force -Path $unpackDir | Out-Null
@@ -345,7 +342,7 @@ function Install-Erp([string]$TempDir, [string]$BinDir) {
   $assetUrl = Get-LatestAssetUrl 'xingfengdev-2026/erp' $assetName
   $downloadPath = Join-Path $TempDir $assetName
 
-  Write-Info 'Downloading erp through the GitHub accelerator'
+  Write-Info "Downloading erp $assetName from latest release"
   Invoke-InstallerWebRequest $assetUrl $downloadPath | Out-Null
 
   Copy-Item -LiteralPath $downloadPath -Destination (Join-Path $BinDir 'erp.exe') -Force
