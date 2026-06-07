@@ -1,0 +1,22 @@
+# Local test / install output (may contain a real server address, token, or UUID)
+windows-test-install/
+*.local.toml
+*.local.json
+
+# Downloaded binaries
+*.zip
+xray
+xray.exe
+erp
+erp.exe
+geoip.dat
+geosite.dat
+
+# Logs
+*.log
+logs/
+
+# OS / editor noise
+.DS_Store
+Thumbs.db
+*.swp

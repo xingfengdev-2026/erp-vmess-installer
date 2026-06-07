@@ -1,0 +1,4 @@
+# Normalize line endings so the shell installer always has LF (CRLF breaks `curl | sh`)
+* text=auto eol=lf
+*.sh text eol=lf
+*.bat text eol=crlf
