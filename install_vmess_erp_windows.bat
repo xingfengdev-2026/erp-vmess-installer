@@ -213,6 +213,29 @@ function Get-ServerHost([string]$Addr) {
   return $Addr
 }
 
+function Is-PlaceholderServer([string]$Value) {
+  if ([string]::IsNullOrWhiteSpace($Value)) {
+    return $false
+  }
+  return ($Value.IndexOf('YOUR_SERVER_HOST', [StringComparison]::OrdinalIgnoreCase) -ge 0)
+}
+
+function Ensure-RealServer {
+  while (Is-PlaceholderServer $Server) {
+    Write-Warning 'ERP server address contains the placeholder YOUR_SERVER_HOST.'
+    $controlPort = Get-ControlPort $Server
+    if ($null -ne $controlPort) {
+      $replacementHost = Read-Host 'erp server host (without port)'
+      if ([string]::IsNullOrWhiteSpace($replacementHost)) {
+        throw 'erp server host must not be empty.'
+      }
+      $script:Server = "${replacementHost}:$controlPort"
+    } else {
+      $script:Server = Read-Host 'Enter erp server control address (host:port)'
+    }
+  }
+}
+
 function Normalize-Defaults {
   if ([string]::IsNullOrWhiteSpace($Token)) { $script:Token = '19890604' }
   if ([string]::IsNullOrWhiteSpace($Transport)) { $script:Transport = 'raw' }
@@ -264,6 +287,7 @@ function Validate-Inputs {
   if ([string]::IsNullOrWhiteSpace($Server)) {
     $script:Server = Read-Host 'Enter erp server control address (host:port)'
   }
+  Ensure-RealServer
 
   if ([string]::IsNullOrWhiteSpace($RemotePort)) {
     $script:RemotePort = Read-Host 'Enter erp server public remote port'
@@ -557,6 +581,10 @@ if (-not [Environment]::Is64BitOperatingSystem) {
 # downloads can finish before we prompt for the rest of the parameters.
 if ($Interactive) {
   $script:GithubProxyPrefix = Read-Value 'GitHub accelerator prefix (a github-proxy instance URL, blank for none)' $GithubProxyPrefix
+}
+
+if (Is-PlaceholderServer $Server) {
+  Ensure-RealServer
 }
 
 $tempDir = Join-Path ([IO.Path]::GetTempPath()) ('erp-vmess-' + [guid]::NewGuid().ToString('N'))

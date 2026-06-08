@@ -35,32 +35,23 @@ What the scripts do:
 
 ### Linux — `curl … | sh`
 
-Run as **root** (or with passwordless `sudo`). Replace the server address and
-port with your own:
+Use the same command for both Linux run modes. If you run it from a **root**
+shell, the installer uses **systemd**. If you run it as a normal user, it uses
+**tmux** under `~/.local/share/erp-vmess`.
 
 ```sh
-curl -fsSL https://raw.githubusercontent.com/xingfengdev-2026/erp-vmess-installer/main/install_vmess_erp.sh \
-  | sudo bash -s -- --server YOUR_SERVER_HOST:6000 --remote-port 10086
+curl -fsSL https://raw.githubusercontent.com/xingfengdev-2026/erp-vmess-installer/main/install_vmess_erp.sh | bash -s -- --server YOUR_SERVER_HOST:6000 --remote-port 10086
 ```
 
-Already root? Drop the `sudo`:
-
-```sh
-curl -fsSL https://raw.githubusercontent.com/xingfengdev-2026/erp-vmess-installer/main/install_vmess_erp.sh \
-  | bash -s -- --server YOUR_SERVER_HOST:6000 --remote-port 10086
-```
-
-> If your `sudo` asks for a password it can't read it from the pipe — either run
-> as root, or download the script first and then run it (see below).
+Replace the server address and port with your own values. Non-root mode needs
+`tmux` available on the machine.
 
 ### Windows — elevated PowerShell one-liner
 
 Open **PowerShell as Administrator**, then:
 
 ```powershell
-$bat = "$env:TEMP\install_vmess_erp_windows.bat"
-Invoke-WebRequest -UseBasicParsing -Uri https://raw.githubusercontent.com/xingfengdev-2026/erp-vmess-installer/main/install_vmess_erp_windows.bat -OutFile $bat
-& $bat --server YOUR_SERVER_HOST:6000 --remote-port 23456
+$bat = "$env:TEMP\install_vmess_erp_windows.bat"; Invoke-WebRequest -UseBasicParsing -Uri https://raw.githubusercontent.com/xingfengdev-2026/erp-vmess-installer/main/install_vmess_erp_windows.bat -OutFile $bat; & $bat --server YOUR_SERVER_HOST:6000 --remote-port 23456
 ```
 
 When it finishes, copy the printed `vmess://` link into your client
@@ -73,16 +64,18 @@ When it finishes, copy the printed `vmess://` link into your client
 ### Linux
 
 ```sh
-curl -fsSL -o install_vmess_erp.sh \
-  https://raw.githubusercontent.com/xingfengdev-2026/erp-vmess-installer/main/install_vmess_erp.sh
+curl -fsSL -o install_vmess_erp.sh https://raw.githubusercontent.com/xingfengdev-2026/erp-vmess-installer/main/install_vmess_erp.sh
 chmod +x install_vmess_erp.sh
 
 # Interactive — prompts for every value:
-sudo ./install_vmess_erp.sh --interactive
+./install_vmess_erp.sh --interactive
 
 # Or non-interactive:
-sudo ./install_vmess_erp.sh --server YOUR_SERVER_HOST:6000 --remote-port 10086
+./install_vmess_erp.sh --server YOUR_SERVER_HOST:6000 --remote-port 10086
 ```
+
+Run these commands from a root shell for systemd mode, or from a normal user
+shell for tmux mode.
 
 ### Windows
 
@@ -202,14 +195,14 @@ your erp server host; the port is the `remote-port` you chose.
 
 ## Uninstall
 
-**Linux (systemd):**
+**Linux (systemd, root shell):**
 
 ```sh
-sudo systemctl disable --now xray.service erp-client.service
-sudo rm -f /etc/systemd/system/xray.service /etc/systemd/system/erp-client.service
-sudo systemctl daemon-reload
-sudo rm -rf /usr/local/etc/xray /etc/erp /var/log/erp-vmess
-sudo rm -f /usr/local/bin/xray /usr/local/bin/erp
+systemctl disable --now xray.service erp-client.service
+rm -f /etc/systemd/system/xray.service /etc/systemd/system/erp-client.service
+systemctl daemon-reload
+rm -rf /usr/local/etc/xray /etc/erp /var/log/erp-vmess
+rm -f /usr/local/bin/xray /usr/local/bin/erp
 ```
 
 **Linux (tmux):**

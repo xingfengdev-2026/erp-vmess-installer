@@ -66,7 +66,7 @@ Environment variables with the same names are also supported:
 
 Example:
   ./install_vmess_erp.sh --interactive
-  sudo ./install_vmess_erp.sh --server example.com:6000 --remote-port 10086
+  ./install_vmess_erp.sh --server example.com:6000 --remote-port 10086
   ERP_SERVER_ADDR=example.com:6000 ERP_REMOTE_PORT=10086 RUN_MODE=tmux ./install_vmess_erp.sh
 EOF
 }
@@ -209,6 +209,26 @@ default_run_mode() {
   fi
 }
 
+can_prompt() {
+  [[ -t 0 || -r /dev/tty ]]
+}
+
+read_prompt() {
+  local prompt="$1"
+  local input
+
+  if [[ -t 0 ]]; then
+    IFS= read -r -p "$prompt" input || return 1
+  elif [[ -r /dev/tty ]]; then
+    printf '%s' "$prompt" > /dev/tty
+    IFS= read -r input < /dev/tty || return 1
+  else
+    return 1
+  fi
+
+  printf '%s' "$input"
+}
+
 prompt_value() {
   local var_name="$1"
   local label="$2"
@@ -222,10 +242,12 @@ prompt_value() {
   fi
 
   if [[ -n "$default_value" ]]; then
-    read -r -p "${label} [${default_value}]: " input
+    input="$(read_prompt "${label} [${default_value}]: ")" \
+      || die "Cannot prompt for ${label}; pass it as an option or environment variable."
     input="${input:-$default_value}"
   else
-    read -r -p "${label}: " input
+    input="$(read_prompt "${label}: ")" \
+      || die "Cannot prompt for ${label}; pass it as an option or environment variable."
   fi
   printf -v "$var_name" '%s' "$input"
 }
@@ -243,9 +265,11 @@ prompt_optional_value() {
   fi
 
   if [[ -n "$default_value" ]]; then
-    read -r -p "${label} [${default_value}, blank for auto/default]: " input
+    input="$(read_prompt "${label} [${default_value}, blank for auto/default]: ")" \
+      || die "Cannot prompt for ${label}; pass it as an option or environment variable."
   else
-    read -r -p "${label} [blank for auto/default]: " input
+    input="$(read_prompt "${label} [blank for auto/default]: ")" \
+      || die "Cannot prompt for ${label}; pass it as an option or environment variable."
   fi
 
   if [[ -n "$input" ]]; then
@@ -254,7 +278,7 @@ prompt_optional_value() {
 }
 
 prompt_interactive_inputs() {
-  [[ -t 0 ]] || die "--interactive requires a TTY."
+  can_prompt || die "--interactive requires a TTY."
 
   prompt_value ERP_SERVER_ADDR "erp server control address" "$ERP_SERVER_ADDR"
   prompt_value ERP_TOKEN "erp token" "$ERP_TOKEN"
@@ -335,19 +359,45 @@ server_host_from_addr() {
   fi
 }
 
+is_placeholder_server_addr() {
+  [[ "${1:-}" =~ [Yy][Oo][Uu][Rr]_[Ss][Ee][Rr][Vv][Ee][Rr]_[Hh][Oo][Ss][Tt] ]]
+}
+
+ensure_real_server_addr() {
+  local control_port
+  local replacement_host
+
+  while is_placeholder_server_addr "$ERP_SERVER_ADDR"; do
+    warn "ERP_SERVER_ADDR contains the placeholder YOUR_SERVER_HOST."
+    can_prompt || die "Replace YOUR_SERVER_HOST in --server with your real erp server host."
+
+    control_port="$(control_port_from_addr "$ERP_SERVER_ADDR" || true)"
+    if [[ -n "$control_port" ]]; then
+      replacement_host="$(read_prompt "erp server host (without port): ")" \
+        || die "Cannot prompt for erp server host; pass --server host:port."
+      [[ -n "$replacement_host" ]] || die "erp server host must not be empty."
+      ERP_SERVER_ADDR="${replacement_host}:${control_port}"
+    else
+      prompt_value ERP_SERVER_ADDR "erp server control address (host:port)" ""
+    fi
+  done
+}
+
 validate_inputs() {
   [[ "$(uname -s)" == "Linux" ]] || die "This installer only supports Linux."
 
   if [[ -z "$ERP_SERVER_ADDR" ]]; then
-    if [[ -t 0 ]]; then
+    if can_prompt; then
       prompt_value ERP_SERVER_ADDR "erp server control address (host:port)" ""
     else
       die "ERP_SERVER_ADDR is required. Pass --server host:port or set ERP_SERVER_ADDR."
     fi
   fi
 
+  ensure_real_server_addr
+
   if [[ -z "$ERP_REMOTE_PORT" ]]; then
-    if [[ -t 0 ]]; then
+    if can_prompt; then
       prompt_value ERP_REMOTE_PORT "erp server public remote port" "10086"
     else
       die "ERP_REMOTE_PORT is required in non-interactive mode."
@@ -868,16 +918,20 @@ main() {
   # Ask for the GitHub accelerator first (interactive only) so the large Xray and
   # erp downloads can finish before we prompt for the rest of the parameters.
   if is_truthy "$INTERACTIVE"; then
-    [[ -t 0 ]] || die "--interactive requires a TTY."
+    can_prompt || die "--interactive requires a TTY."
     prompt_value GITHUB_PROXY_PREFIX \
       "GitHub accelerator prefix (a github-proxy instance URL, blank for none)" \
       "$GITHUB_PROXY_PREFIX"
   fi
 
+  if [[ -n "$ERP_SERVER_ADDR" ]] && is_placeholder_server_addr "$ERP_SERVER_ADDR"; then
+    ensure_real_server_addr
+  fi
+
   # Fail fast before downloading if a required parameter is missing and there is
-  # no TTY to prompt on (e.g. `curl ... | bash`). With a TTY, validate_inputs
-  # prompts for these after the download instead.
-  if [[ ! -t 0 ]]; then
+  # no promptable terminal. With a promptable terminal, validate_inputs prompts
+  # for these after the download instead.
+  if ! can_prompt; then
     [[ -n "$ERP_SERVER_ADDR" ]] || die "ERP_SERVER_ADDR is required. Pass --server host:port or set ERP_SERVER_ADDR."
     [[ -n "$ERP_REMOTE_PORT" ]] || die "ERP_REMOTE_PORT is required. Pass --remote-port PORT or set ERP_REMOTE_PORT."
   fi
