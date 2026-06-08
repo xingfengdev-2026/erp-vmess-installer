@@ -40,18 +40,18 @@ shell, the installer uses **systemd**. If you run it as a normal user, it uses
 **tmux** under `~/.local/share/erp-vmess`.
 
 ```sh
-curl -fsSL https://raw.githubusercontent.com/xingfengdev-2026/erp-vmess-installer/main/install_vmess_erp.sh | bash -s -- --server YOUR_SERVER_HOST:6000 --remote-port 10086
+curl -fsSL https://raw.githubusercontent.com/xingfengdev-2026/erp-vmess-installer/main/install_vmess_erp.sh | bash -s -- --server YOUR_SERVER_HOST:6000 --token 19890604 --remote-port 10086
 ```
 
-Replace the server address and port with your own values. Non-root mode needs
-`tmux` available on the machine.
+Replace the server address, token, and port with your own values. Non-root mode
+needs `tmux` available on the machine.
 
 ### Windows — elevated PowerShell one-liner
 
 Open **PowerShell as Administrator**, then:
 
 ```powershell
-$bat = "$env:TEMP\install_vmess_erp_windows.bat"; Invoke-WebRequest -UseBasicParsing -Uri https://raw.githubusercontent.com/xingfengdev-2026/erp-vmess-installer/main/install_vmess_erp_windows.bat -OutFile $bat; & $bat --server YOUR_SERVER_HOST:6000 --remote-port 10088
+$bat = "$env:TEMP\install_vmess_erp_windows.bat"; Invoke-WebRequest -UseBasicParsing -Uri https://raw.githubusercontent.com/xingfengdev-2026/erp-vmess-installer/main/install_vmess_erp_windows.bat -OutFile $bat; & $bat --server YOUR_SERVER_HOST:6000 --token 19890604 --remote-port 10088
 ```
 
 When it finishes, copy the printed `vmess://` link into your client
@@ -71,7 +71,7 @@ chmod +x install_vmess_erp.sh
 ./install_vmess_erp.sh --interactive
 
 # Or non-interactive:
-./install_vmess_erp.sh --server YOUR_SERVER_HOST:6000 --remote-port 10086
+./install_vmess_erp.sh --server YOUR_SERVER_HOST:6000 --token 19890604 --remote-port 10086
 ```
 
 Run these commands from a root shell for systemd mode, or from a normal user
@@ -84,7 +84,7 @@ Download `install_vmess_erp_windows.bat`, then in an **Administrator** prompt:
 ```bat
 install_vmess_erp_windows.bat --interactive
 :: or
-install_vmess_erp_windows.bat --server YOUR_SERVER_HOST:6000 --remote-port 10088
+install_vmess_erp_windows.bat --server YOUR_SERVER_HOST:6000 --token 19890604 --remote-port 10088
 ```
 
 ---
@@ -98,7 +98,7 @@ environment variable.
 | --- | --- | --- | --- | --- |
 | `--server ADDR` | `ERP_SERVER_ADDR` | **yes** | — | erp server control address `host:port`. |
 | `--remote-port PORT` | `ERP_REMOTE_PORT` | **yes** | — | Public TCP port opened on the erp server for this node. |
-| `--token TOKEN` | `ERP_TOKEN` | no | `19890604` | erp shared token. Must match your server. |
+| `--token TOKEN` | `ERP_TOKEN` | **yes** | — | erp shared token. Must match your server. |
 | `--transport NAME` | `ERP_TRANSPORT` | no | `raw` | erp transport (only `raw` is implemented). |
 | `--xray-port PORT` | `XRAY_LOCAL_PORT` | no | `10086` | Local Xray VMess port (loopback only). |
 | `--uuid UUID` | `XRAY_UUID` | no | auto-generated | VMess client UUID. |
@@ -229,8 +229,8 @@ rmdir /s /q "%ProgramData%\erp-vmess"
   and the VMess UUID. Use it accordingly.
 - Architecture: **Linux x86_64** and **64-bit Windows** only (the upstream `erp`
   release has no Linux arm64 binary).
-- The default token `19890604` is only a placeholder — set `--token` to match
-  your own server.
+- The example token `19890604` is only a placeholder — set `--token` to match
+  your own server. The installer has no default token.
 
 ## License
 

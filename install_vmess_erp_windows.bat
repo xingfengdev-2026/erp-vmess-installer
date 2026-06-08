@@ -31,14 +31,14 @@ if ($env:INTERACTIVE -match '^(1|true|yes|y|on)$') {
 function Show-Usage {
   @'
 Usage:
-  install_vmess_erp_windows.bat --remote-port PORT [options]
+  install_vmess_erp_windows.bat --server ADDR --token TOKEN --remote-port PORT [options]
 
 Required (unless using --interactive):
   --server ADDR            erp server control address as host:port.
   --remote-port PORT       Public TCP port opened on the erp server.
+  --token TOKEN            erp shared token. Must match your server.
 
 Options:
-  --token TOKEN            erp shared token. Default: 19890604
   --transport NAME         erp transport. Default: raw
   --xray-port PORT         Local Xray VMess port. Default: 10086
   --uuid UUID              VMess UUID. Default: generated automatically
@@ -56,7 +56,7 @@ Environment variables with the same names are also supported:
   XRAY_UUID CLIENT_ID GITHUB_PROXY_PREFIX INSTALL_ROOT INTERACTIVE
 
 Example:
-  install_vmess_erp_windows.bat --server example.com:6000 --remote-port 23456
+  install_vmess_erp_windows.bat --server example.com:6000 --token 19890604 --remote-port 10088
   install_vmess_erp_windows.bat --interactive
 '@
 }
@@ -232,7 +232,6 @@ function Ensure-RealServer {
 }
 
 function Normalize-Defaults {
-  if ([string]::IsNullOrWhiteSpace($Token)) { $script:Token = '19890604' }
   if ([string]::IsNullOrWhiteSpace($Transport)) { $script:Transport = 'raw' }
   if ([string]::IsNullOrWhiteSpace($XrayPort)) { $script:XrayPort = '10086' }
   if ([string]::IsNullOrWhiteSpace($InstallRoot)) {
@@ -286,6 +285,10 @@ function Validate-Inputs {
 
   if ([string]::IsNullOrWhiteSpace($RemotePort)) {
     $script:RemotePort = Read-Host 'Enter erp server public remote port'
+  }
+
+  if ([string]::IsNullOrWhiteSpace($Token)) {
+    $script:Token = Read-Host 'Enter erp token'
   }
 
   if (-not (Is-Port $RemotePort)) { throw "ERP remote port must be an integer from 1 to 65535." }

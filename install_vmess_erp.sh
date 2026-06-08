@@ -2,7 +2,7 @@
 set -Eeuo pipefail
 
 ERP_SERVER_ADDR="${ERP_SERVER_ADDR:-}"
-ERP_TOKEN="${ERP_TOKEN:-19890604}"
+ERP_TOKEN="${ERP_TOKEN:-}"
 ERP_TRANSPORT="${ERP_TRANSPORT:-raw}"
 ERP_REMOTE_PORT="${ERP_REMOTE_PORT:-}"
 XRAY_LOCAL_PORT="${XRAY_LOCAL_PORT:-10086}"
@@ -38,15 +38,15 @@ die() {
 usage() {
   cat <<'EOF'
 Usage:
-  ./install_vmess_erp.sh --remote-port PORT [options]
+  ./install_vmess_erp.sh --server ADDR --token TOKEN --remote-port PORT [options]
   ./install_vmess_erp.sh --interactive
 
 Required (unless using --interactive):
   --server ADDR            erp server control address as host:port.
   --remote-port PORT       Public TCP port opened on the erp server.
+  --token TOKEN            erp shared token. Must match your server.
 
 Options:
-  --token TOKEN            erp shared token. Default: 19890604
   --transport NAME         erp transport. Default: raw
   --xray-port PORT         Local Xray VMess port. Default: 10086
   --uuid UUID              VMess UUID. Default: generated automatically
@@ -66,8 +66,8 @@ Environment variables with the same names are also supported:
 
 Example:
   ./install_vmess_erp.sh --interactive
-  ./install_vmess_erp.sh --server example.com:6000 --remote-port 10086
-  ERP_SERVER_ADDR=example.com:6000 ERP_REMOTE_PORT=10086 RUN_MODE=tmux ./install_vmess_erp.sh
+  ./install_vmess_erp.sh --server example.com:6000 --token 19890604 --remote-port 10086
+  ERP_SERVER_ADDR=example.com:6000 ERP_TOKEN=19890604 ERP_REMOTE_PORT=10086 RUN_MODE=tmux ./install_vmess_erp.sh
 EOF
 }
 
@@ -395,6 +395,14 @@ validate_inputs() {
       prompt_value ERP_REMOTE_PORT "erp server public remote port" "10086"
     else
       die "ERP_REMOTE_PORT is required in non-interactive mode."
+    fi
+  fi
+
+  if [[ -z "$ERP_TOKEN" ]]; then
+    if can_prompt; then
+      prompt_value ERP_TOKEN "erp token" ""
+    else
+      die "ERP_TOKEN is required in non-interactive mode."
     fi
   fi
 
@@ -928,6 +936,7 @@ main() {
   if ! can_prompt; then
     [[ -n "$ERP_SERVER_ADDR" ]] || die "ERP_SERVER_ADDR is required. Pass --server host:port or set ERP_SERVER_ADDR."
     [[ -n "$ERP_REMOTE_PORT" ]] || die "ERP_REMOTE_PORT is required. Pass --remote-port PORT or set ERP_REMOTE_PORT."
+    [[ -n "$ERP_TOKEN" ]] || die "ERP_TOKEN is required. Pass --token TOKEN or set ERP_TOKEN."
   fi
 
   ensure_download_dependencies
