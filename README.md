@@ -51,7 +51,7 @@ Replace the server address and port with your own values. Non-root mode needs
 Open **PowerShell as Administrator**, then:
 
 ```powershell
-$bat = "$env:TEMP\install_vmess_erp_windows.bat"; Invoke-WebRequest -UseBasicParsing -Uri https://raw.githubusercontent.com/xingfengdev-2026/erp-vmess-installer/main/install_vmess_erp_windows.bat -OutFile $bat; & $bat --server YOUR_SERVER_HOST:6000 --remote-port 23456
+$bat = "$env:TEMP\install_vmess_erp_windows.bat"; Invoke-WebRequest -UseBasicParsing -Uri https://raw.githubusercontent.com/xingfengdev-2026/erp-vmess-installer/main/install_vmess_erp_windows.bat -OutFile $bat; & $bat --server YOUR_SERVER_HOST:6000 --remote-port 10088
 ```
 
 When it finishes, copy the printed `vmess://` link into your client
@@ -84,7 +84,7 @@ Download `install_vmess_erp_windows.bat`, then in an **Administrator** prompt:
 ```bat
 install_vmess_erp_windows.bat --interactive
 :: or
-install_vmess_erp_windows.bat --server YOUR_SERVER_HOST:6000 --remote-port 23456
+install_vmess_erp_windows.bat --server YOUR_SERVER_HOST:6000 --remote-port 10088
 ```
 
 ---
