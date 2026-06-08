@@ -210,7 +210,9 @@ default_run_mode() {
 }
 
 can_prompt() {
-  [[ -t 0 || -r /dev/tty ]]
+  [[ -t 0 ]] && return 0
+  [[ -r /dev/tty ]] || return 1
+  { : < /dev/tty; } 2>/dev/null
 }
 
 read_prompt() {
