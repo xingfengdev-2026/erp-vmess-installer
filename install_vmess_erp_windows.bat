@@ -223,16 +223,11 @@ function Is-PlaceholderServer([string]$Value) {
 function Ensure-RealServer {
   while (Is-PlaceholderServer $Server) {
     Write-Warning 'ERP server address contains the placeholder YOUR_SERVER_HOST.'
-    $controlPort = Get-ControlPort $Server
-    if ($null -ne $controlPort) {
-      $replacementHost = Read-Host 'erp server host (without port)'
-      if ([string]::IsNullOrWhiteSpace($replacementHost)) {
-        throw 'erp server host must not be empty.'
-      }
-      $script:Server = "${replacementHost}:$controlPort"
-    } else {
-      $script:Server = Read-Host 'Enter erp server control address (host:port)'
+    $replacementServer = Read-Host 'erp server ip:port'
+    if ([string]::IsNullOrWhiteSpace($replacementServer)) {
+      throw 'erp server address must not be empty.'
     }
+    $script:Server = $replacementServer
   }
 }
 

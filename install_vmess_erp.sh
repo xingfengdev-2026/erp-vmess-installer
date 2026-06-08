@@ -364,22 +364,16 @@ is_placeholder_server_addr() {
 }
 
 ensure_real_server_addr() {
-  local control_port
-  local replacement_host
+  local replacement_addr
 
   while is_placeholder_server_addr "$ERP_SERVER_ADDR"; do
     warn "ERP_SERVER_ADDR contains the placeholder YOUR_SERVER_HOST."
     can_prompt || die "Replace YOUR_SERVER_HOST in --server with your real erp server host."
 
-    control_port="$(control_port_from_addr "$ERP_SERVER_ADDR" || true)"
-    if [[ -n "$control_port" ]]; then
-      replacement_host="$(read_prompt "erp server host (without port): ")" \
-        || die "Cannot prompt for erp server host; pass --server host:port."
-      [[ -n "$replacement_host" ]] || die "erp server host must not be empty."
-      ERP_SERVER_ADDR="${replacement_host}:${control_port}"
-    else
-      prompt_value ERP_SERVER_ADDR "erp server control address (host:port)" ""
-    fi
+    replacement_addr="$(read_prompt "erp server ip:port: ")" \
+      || die "Cannot prompt for erp server address; pass --server ip:port."
+    [[ -n "$replacement_addr" ]] || die "erp server address must not be empty."
+    ERP_SERVER_ADDR="$replacement_addr"
   done
 }
 
